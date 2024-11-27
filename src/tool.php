@@ -7,9 +7,9 @@
  */
 
 /*
-╔══════════════════════════════════════════════════════════════════════
+╔═══════════════════════════════════════════════════════════════════════════
 ║  STAGE ~ TOOLS ≡ tool.php
-╠══════════════════════════════════════════════════════════════════════
+╠═══════════════════════════════════════════════════════════════════════════
 ║
 */
 
@@ -35,6 +35,33 @@ class Tool
         return is_file(realpath(join(DIRECTORY_SEPARATOR, [$root = $root === NULL || $root === TRUE || $root === FALSE ? $_SERVER['DOCUMENT_ROOT'] : $root, $base = $base === NULL ? FALSE : ($base === TRUE ? (self::$template ?? $_ENV['STORAGE']) : ($base === FALSE ? $_ENV['STORAGE'] : (is_array($base) ? trim(implode('/', $base), '/') : trim($base, '/')))), $name = $name === NULL ? FALSE : ($name === TRUE ? FALSE : (is_array($name) ? trim(implode('/', $name), '/') : trim($name, '/')))]))) ? Tool::url([$base, $name], $version ?: filemtime(realpath(join(DIRECTORY_SEPARATOR, [$root, $base, $name]))), $host = $host === NULL || $host === TRUE || $host === FALSE ? ($template['storage'] ?? TRUE) : (filter_var(parse_url($host, PHP_URL_SCHEME)) ? $host : TRUE)) : Tool::url([$base, $name], $version, $host);
     }
 
+    # BOOT
+
+    public static function bootstrap($errorHandler)
+    {
+        if (file_exists(self::path('.maintenance'))) {
+
+            $_ENV['MAINTENANCE'] = TRUE;
+
+            self::status(503);
+
+            exit(require self::path([$_ENV['ERRORDOCS'], $_ENV['503']]));
+        }
+
+        if (!empty($_ENV['LOG_ERROR'])) {
+
+            $errorHandler->setLogger(function ($level, $message, $context) {
+
+                file_put_contents(
+
+                    self::path([$_ENV['LOG'], $_ENV['LOG_ERROR_FILENAME']]),
+
+                    sprintf("[%s] Level: %s\nMessage: %s\nContext: %s\n\n", date('Y-m-d H:i:s'), $level, $message, json_encode($context, JSON_PRETTY_PRINT)), FILE_APPEND
+                );
+            });
+        }
+    }
+
     # CLI
 
     public static function CLI()
@@ -55,7 +82,7 @@ class Tool
     {
         if (isset($_SERVER['CONTENT_TYPE'])) {
 
-            if (stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== FALSE) {
+            if (stripos($_SERVER['CONTENT_TYPE'], MIME['json']) !== FALSE) {
 
                 return self::JsonInput();
 
@@ -105,9 +132,9 @@ class Tool
 
     # RESPONSE
 
-    public static function response($data, $format = MIME['application/json'], $api = API['rest'], $code = FALSE)
+    public static function response($data, $format = MIME['json'], $api = API['rest'], $code = FALSE)
     {
-        $format = strtolower($format) !== MIME['application/xml'] ? MIME['application/json'] : MIME['application/xml'];
+        $format = strtolower($format) !== MIME['xml'] ? MIME['json'] : MIME['xml'];
 
         if ($code) Tool::status($code);
 
@@ -125,7 +152,7 @@ class Tool
 
                 default:
 
-                    if ($format === MIME['application/xml']) {
+                    if ($format === MIME['xml']) {
 
                         if (!is_array($data)) $data = ['response' => $data];
 
@@ -177,7 +204,7 @@ class Tool
     return $xmlData;
     }
 
-    private static function formatGraphQLData($data, $format = MIME['application/json'])
+    private static function formatGraphQLData($data, $format = MIME['json'])
     {
         $response = [];
 
@@ -192,7 +219,7 @@ class Tool
             $response['data'] = $data;
         }
 
-        if (strtolower($format) === MIME['application/xml']) {
+        if (strtolower($format) === MIME['xml']) {
 
             $xmlData = new SimpleXMLElement('<graphql/>');
 
@@ -204,9 +231,9 @@ class Tool
     return json_encode($response);
     }
 
-    private static function formatSOAPData($data, $format = MIME['application/xml'])
+    private static function formatSOAPData($data, $format = MIME['xml'])
     {
-        if (strtolower($format) === MIME['application/json']) {
+        if (strtolower($format) === MIME['json']) {
 
             $response = ['SOAP-ENV:Envelope' => ['SOAP-ENV:Body' => $data]];
 
@@ -306,7 +333,7 @@ class Tool
         return trim(join('/', [$host === TRUE ? SCHEME . HOST : (is_null($host) || $host === FALSE ? FALSE : (filter_var($phost = parse_url($host, PHP_URL_SCHEME) ? rtrim($host, '/') : str_replace(PROTOCOL, 'http', SCHEME) . rtrim($host, '/'), FILTER_VALIDATE_URL) ? $phost : FALSE)), $path === TRUE ? PATH : (is_null($path) || $path === FALSE ? FALSE : (is_array($path) ? implode('/', array_filter(array_map(fn($v) => trim($v, '/'), array_values($path)))) : trim($path, '/')))]), '/') . (is_null($path) ? (is_null($host) ? (is_null($query) ? FALSE : (self::query(($query === TRUE ? QUERY : ($query === FALSE ? rawurldecode(http_build_query(array_filter(GET ?? [], fn($key) => !in_array($key, CALL), ARRAY_FILTER_USE_KEY))) : (is_null($query) ? FALSE : (is_array($query) ? http_build_query($query) : ltrim($query, '?'))))), $combine))) : (is_null($query) ? FALSE : '/?' . (self::query(($query === TRUE ? QUERY : ($query === FALSE ? rawurldecode(http_build_query(array_filter(GET ?? [], fn($key) => !in_array($key, CALL), ARRAY_FILTER_USE_KEY))) : (is_null($query) ? FALSE : (is_array($query) ? http_build_query($query) : ltrim($query, '?'))))), $combine)))) : (is_null($query) ? FALSE : ((($fquery = (self::query(($query === TRUE ? QUERY : ($query === FALSE ? rawurldecode(http_build_query(array_filter(GET ?? [], fn($key) => !in_array($key, CALL), ARRAY_FILTER_USE_KEY))) : (is_null($query) ? FALSE : (is_array($query) ? http_build_query($query) : ltrim($query, '?'))))), $combine))) ? '?' . $fquery : FALSE)))) . $fragment;
     }
 
-    private static function query($query = FALSE, $combine)
+    private static function query($query = FALSE, $combine = NULL)
     {
         if (is_array($combine) && isset($combine[1])) {
 
